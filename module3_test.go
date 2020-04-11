@@ -103,9 +103,18 @@ func TestWriteAllBeforeShutdownModule3(t *testing.T) {
 	alog.msgCh <- "first"
 	alog.msgCh <- "second"
 	time.Sleep(10 * time.Millisecond)
-	alog.Stop()
-	written := b.String()
-	if !strings.Contains(written, "first") || !strings.Contains(written, "second") {
-		t.Error("Not all messages written before logger shutdown")
+	doneCh := make(chan struct{})
+	go func() {
+		alog.Stop()
+		written := b.String()
+		if !strings.Contains(written, "first") || !strings.Contains(written, "second") {
+			t.Error("Not all messages written before logger shutdown")
+		}
+		doneCh <- struct{}{}
+	}()
+	select {
+	case <-time.Tick(1 * time.Second):
+		t.Error("Test timed out, please check that the Done method on the wait group is being called in the write method")
+	case <-doneCh:
 	}
 }

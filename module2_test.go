@@ -5,6 +5,7 @@ import (
 	"errors"
 	"reflect"
 	"regexp"
+	"sync"
 	"testing"
 	"time"
 )
@@ -55,7 +56,9 @@ func TestErrorChannelMethodModule2(t *testing.T) {
 func TestWritesToWriterModule2(t *testing.T) {
 	b := bytes.NewBuffer([]byte{})
 	alog := New(b)
-	alog.write("test", nil)
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	alog.write("test", wg)
 
 	written := b.String()
 	if written == "" {
@@ -78,7 +81,9 @@ func (ew errorWriter) Write(data []byte) (int, error) {
 func TestWriteSendsErrorsToErrorChannelModule2(t *testing.T) {
 	alog := New(&errorWriter{bytes.NewBuffer([]byte{})})
 	alog.errorCh = make(chan error, 1)
-	alog.write("test", nil)
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	alog.write("test", wg)
 	go func() {
 		if (<-alog.errorCh).Error() != "error" {
 			t.Fatal("Did not receive destination writer's error on errorCh")
@@ -148,9 +153,11 @@ func TestWriteSendsWriteRequestsSequentiallyModule2(t *testing.T) {
 	if alog.m == nil {
 		t.Fatal("Alog's mutex field 'm' not initialized")
 	}
-	go alog.write("test message", nil)
+	wg := &sync.WaitGroup{}
+	wg.Add(2)
+	go alog.write("test message", wg)
 	time.Sleep(100 * time.Millisecond)
-	go alog.write("second message", nil)
+	go alog.write("second message", wg)
 	time.Sleep(1000 * time.Millisecond)
 	written := b.Bytes()
 	if !regexp.MustCompile(messageTimestampPattern + "test message\nwrite complete" + messageTimestampPattern + "second message\n").Match(written) {
@@ -169,14 +176,14 @@ func TestWriteSendsWriteRequestsSequentiallyModule2(t *testing.T) {
 		defer func() {
 			recover()
 		}()
-		alog.write("test message", nil)
+		alog.write("test message", wg)
 	}()
 	time.Sleep(100 * time.Millisecond)
 	go func() {
 		defer func() {
 			recover()
 		}()
-		alog.write("second message", nil)
+		alog.write("second message", wg)
 	}()
 	time.Sleep(1000 * time.Millisecond)
 	written = b.Bytes()
@@ -190,9 +197,11 @@ func TestWriteSendsErrorsAsynchronouslyModule2(t *testing.T) {
 	TestWriteSendsWriteRequestsSequentiallyModule2(t)
 	b := bytes.NewBuffer([]byte{})
 	alog := New(&errorWriter{b})
-	go alog.write("first", nil)
+	wg := &sync.WaitGroup{}
+	wg.Add(2)
+	go alog.write("first", wg)
 	time.Sleep(100 * time.Millisecond)
-	go alog.write("second", nil)
+	go alog.write("second", wg)
 	time.Sleep(100 * time.Millisecond)
 	written := b.Bytes()
 	if !regexp.MustCompile(`.*first.*\n.*second.*`).Match(written) {

@@ -102,6 +102,7 @@ func TestWriteAllBeforeShutdownModule3(t *testing.T) {
 	go alog.Start()
 	alog.msgCh <- "first"
 	alog.msgCh <- "second"
+	time.Sleep(10 * time.Millisecond)
 	alog.Stop()
 	written := b.String()
 	if !strings.Contains(written, "first") || !strings.Contains(written, "second") {
